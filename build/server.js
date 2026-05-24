@@ -23,6 +23,8 @@ const compression = require('compression');
 /* --- WEEK 4 DEPENDENCIES --- */
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const csrf = require('csurf');
 
 /* Route Imports */
 const login = require('./routes/login');
@@ -38,9 +40,19 @@ const limiter = rateLimit({
 });
 app.use('/rest/user/login', limiter); 
 
+/* --- WEEK 4: API KEY GATEKEEPER AUTOMATION --- */
+app.use('/api', (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  if (!apiKey) {
+    logger.warn(`UNAUTHORIZED API ACCESS ATTEMPTED: Missing API Key from IP ${req.ip}`);
+    return res.status(403).json({ error: "X-API-KEY header missing." });
+  }
+  next();
+});
+
 /* --- WEEK 4: SECURITY HEADERS (CSP & HSTS WITH UI FIX) --- */
 app.use(helmet({
-  contentSecurityPolicy: false, // Disables strict CSP restriction so the UI styles load flawlessly
+  contentSecurityPolicy: false, 
   hsts: {
     maxAge: 31536000, 
     includeSubDomains: true,
@@ -50,10 +62,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-
-const cookieParser = require('cookie-parser');
-const csrf = require('csurf');
-
 /* Middleware Configuration */
 app.use(compression());
 app.use(express.json());
@@ -62,10 +70,9 @@ app.use(express.urlencoded({ extended: true }));
 /* --- WEEK 5: CSRF PROTECTION LAYER --- */
 app.use(cookieParser());
 const csrfProtection = csrf({ cookie: true });
-// Automatically protects all state-changing POST/PUT routes
 app.use((req, res, next) => {
-  if (req.path === '/rest/user/login') {
-    return next(); // Pass login route to let users authenticate cleanly
+  if (req.path === '/rest/user/login' || req.path.startsWith('/api')) {
+    return next(); 
   }
   csrfProtection(req, res, next);
 });
@@ -77,11 +84,11 @@ app.use(express.static(path.resolve('frontend/dist/frontend')));
 app.use('/rest/user/login', login());
 
 /* --- LOG STARTUP EVENT --- */
-logger.info('Application started: Security monitoring, Rate-limiting, and Helmet are active.');
+logger.info('Application started: All security guidelines for Weeks 4-6 are active.');
 
 exports.start = async () => {
     try {
-        await models_1.sequelize.sync({ force: true }); // Wipe duplicates and reset database cleanly
+        await models_1.sequelize.sync({ force: true }); 
         const datacreatorModule = require('./data/datacreator');
         const datacreator = typeof datacreatorModule === 'function' ? datacreatorModule : datacreatorModule.default;
         if (typeof datacreator === 'function') {
